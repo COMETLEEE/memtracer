@@ -1,5 +1,5 @@
 
-# memtracerhttps://github.com/COMETLEEE/memtracer/blob/main/README.md
+# memtracer
 
 ## C++ memory allocation trace and report library for windows program
 
