@@ -5,7 +5,7 @@ namespace memtracer
 {
 	StackBackTrace::StackBackTrace()
 	{
-		frame_count_ = CaptureStackBackTrace(0, MAX_STACK_FRAME, stack_frames, &call_stack_hash_.value_);
+		frame_count_ = CaptureStackBackTrace(0, MAX_STACK_FRAME, stack_frames, &call_stack_hash_);
 	}
 
 	StackBackTrace::~StackBackTrace()
@@ -14,7 +14,7 @@ namespace memtracer
 
 		frame_count_ = 0;
 
-		call_stack_hash_.value_ = 0;
+		call_stack_hash_ = 0;
 	}
 
 	void* StackBackTrace::operator new(size_t size)

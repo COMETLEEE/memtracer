@@ -6,7 +6,8 @@ namespace memtracer
 	template <typename T>
 	class MemoryTracerAllocator final
 	{
-        typedef T value_type;
+    public:
+        using value_type = T;
 
         MemoryTracerAllocator() noexcept {}
 
