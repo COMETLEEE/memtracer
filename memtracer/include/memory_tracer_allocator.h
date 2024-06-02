@@ -16,7 +16,7 @@ namespace memtracer
 
         static T* allocate(size_t n)
 		{
-            return static_cast<T*>(memtracer_allocation(n * sizeof(T)));
+            return static_cast<T*>(memtracer_alloc(n * sizeof(T)));
         }
 
         static void deallocate(T* p, size_t n) noexcept

@@ -16,14 +16,20 @@ namespace memtracer
 
 		void operator delete(void* p);
 
-		void* operator new[](size_t size) = delete;
+		void* operator new[](size_t size);
 
-		void operator delete[](void* p) = delete;
+		void operator delete[](void* p);
+
+		CallStackHash get_call_stack_hash() const;
+
+		FrameCount get_frame_count() const;
+
+		void* get_stack_frame(int index) const;
 
 	private:
 		void* stack_frames[MAX_STACK_FRAME];
 
-		unsigned int frame_count_;
+		FrameCount frame_count_;
 
 		CallStackHash call_stack_hash_;
 	};

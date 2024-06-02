@@ -1,6 +1,8 @@
 #pragma once
 #include "core_define.h"
+#include "memory_operation.h"
 #include "memory_tracer_allocator.h"
+#include "stack_back_trace.h"
 
 namespace memtracer
 {
@@ -48,6 +50,12 @@ namespace memtracer
 
 		void operator delete(void* block);
 
+		void* operator new[](size_t size) = delete;
+
+		void operator delete[](void* block) = delete;
+
+		void thread_update();
+
 		AllocFunc alloc_ = Alloc;
 
 		AllocFunc array_alloc_ = ArrayAlloc;
@@ -56,7 +64,7 @@ namespace memtracer
 
 		FreeFunc array_free_ = ArrayFree;
 
-		// INTERNAL
+#pragma region internal
 		char report_path_[MAX_PATH];
 
 		std::atomic<bool> is_in_trace_;
@@ -65,6 +73,8 @@ namespace memtracer
 			, memtracer::MemoryTracerAllocator<const MemoryOperation*>> memory_operations_;
 
 		std::thread tracer_thread_;
+
+		std::atomic<bool> is_stop_requested_;
 
 #pragma region only_write_in_tracer_thread
 		concurrency::concurrent_unordered_map<void*, size_t, std::hash<void*>
@@ -81,11 +91,16 @@ namespace memtracer
 
 		concurrency::concurrent_unordered_map<CallStackHash, size_t, std::hash<CallStackHash>
 			, std::equal_to<>, memtracer::MemoryTracerAllocator<std::pair<const CallStackHash, size_t>>>
-			hash_to_memory_allocation_;
+			hash_to_memory_allocation_map_;
+
+		concurrency::concurrent_unordered_map<CallStackHash, size_t, std::hash<CallStackHash>
+			, std::equal_to<>, memtracer::MemoryTracerAllocator<std::pair<const CallStackHash, size_t>>>
+			hash_to_memory_allocation_count_map_;
 
 		size_t total_memory_allocation_;
 
 		size_t total_memory_allocation_count_;
+#pragma endregion
 #pragma endregion
 	};
 
@@ -94,9 +109,8 @@ namespace memtracer
 	{
 		assert(instance_ != nullptr);
 
-		// TODO : start tracer thread.
+		instance_->tracer_thread_ = std::thread(thread_update);
 
-		// be last action.
 		instance_->is_in_trace_= true;
 	}
 
@@ -107,9 +121,16 @@ namespace memtracer
 
 		instance_->is_in_trace_ = false;
 
-		// TODO : Sleep or lock (for global new, delete)
+		// TODO : Wait last memory allocation and free
+		Sleep(2000);
 
 		// TODO : stop tracer thread.
+		if (instance_->tracer_thread_.joinable() == true)
+		{
+			instance_->is_stop_requested_ = true;
+
+			instance_->tracer_thread_.join();
+		}
 	}
 
 	template <void*(* Alloc)(size_t), void*(* ArrayAlloc)(size_t), void(* Free)(void*), void(* ArrayFree)(void*)>
@@ -137,7 +158,11 @@ namespace memtracer
 
 		if (instance_->is_in_trace_ == true)
 		{
-			
+			StackBackTrace* stack_back_trace = new StackBackTrace();
+
+			MemoryOperation* memory_operation = new MemoryOperation(EOperationType::Allocate, block, size, new StackBackTrace());
+
+			instance_->memory_operations_.push(memory_operation);
 		}
 
 		return block;
@@ -148,9 +173,14 @@ namespace memtracer
 	{
 		assert(instance_ != nullptr);
 
-		if (instance_->is_in_trace_ == true)
+		if (instance_->is_in_trace_ == true &&
+			instance_->address_to_size_map_[block] != 0)
 		{
+			size_t size = instance_->address_to_size_map_[block];
 
+			MemoryOperation* memory_operation = new MemoryOperation(EOperationType::Free, block, size, nullptr);
+
+			instance_->memory_operations_.push(memory_operation);
 		}
 
 		Free(block);
@@ -161,8 +191,16 @@ namespace memtracer
 		total_memory_allocation_(0)
 		, total_memory_allocation_count_(0)
 		, report_path_(DEFAULT_REPORT_PATH)
+		, is_in_trace_(false)
+		, is_stop_requested_(false)
 		, memory_operations_()
 		, tracer_thread_()
+		, address_to_size_map_()
+		, address_to_hash_map_()
+		, hash_to_stack_back_trace_map_()
+		, hash_to_memory_allocation_map_()
+		, hash_to_memory_allocation_count_map_()
+		
 	{
 	}
 
@@ -202,5 +240,19 @@ namespace memtracer
 	void MemoryTracer<Alloc, ArrayAlloc, Free, ArrayFree>::operator delete(void* block)
 	{
 		memtracer_free(instance_);
+	}
+
+	template <void*(* Alloc)(size_t), void*(* ArrayAlloc)(size_t), void(* Free)(void*), void(* ArrayFree)(void*)>
+	void MemoryTracer<Alloc, ArrayAlloc, Free, ArrayFree>::thread_update()
+	{
+		while (is_stop_requested_ == false)
+		{
+			MemoryOperation* memory_operation = nullptr;
+
+			if (memory_operations_.try_pop(memory_operation) == true)
+			{
+				
+			}
+		}
 	}
 }

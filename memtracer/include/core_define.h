@@ -20,6 +20,8 @@ namespace memtracer
 
 	using FreeFunc = std::function<void(void*)>;
 
+	using FrameCount = WORD;
+
 	using CallStackHash = DWORD;
 }
 

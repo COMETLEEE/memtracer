@@ -1,4 +1,7 @@
 #include "stack_back_trace.h"
+
+#include <cassert>
+
 #include "memory_tracer_allocation.h"
 
 namespace memtracer
@@ -19,11 +22,38 @@ namespace memtracer
 
 	void* StackBackTrace::operator new(size_t size)
 	{
-		return memtracer_allocation(size);
+		return memtracer_alloc(size);
 	}
 
 	void StackBackTrace::operator delete(void* p)
 	{
 		memtracer_free(p);
+	}
+
+	void* StackBackTrace::operator new [](size_t size)
+	{
+		return memtracer_alloc(size);
+	}
+
+	void StackBackTrace::operator delete [](void* p)
+	{
+		memtracer_free(p);
+	}
+
+	CallStackHash StackBackTrace::get_call_stack_hash() const
+	{
+		return call_stack_hash_;
+	}
+
+	FrameCount StackBackTrace::get_frame_count() const
+	{
+		return frame_count_;
+	}
+
+	void* StackBackTrace::get_stack_frame(int index) const
+	{
+		assert(index < frame_count_);
+
+		return stack_frames[index];
 	}
 }
