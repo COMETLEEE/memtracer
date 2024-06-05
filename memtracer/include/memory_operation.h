@@ -8,7 +8,9 @@ namespace memtracer
 	enum class EOperationType : unsigned char
 	{
 		Allocate,
-		Free
+		Free,
+		Snapshot,
+		Stop
 	};
 
 	struct MemoryOperation final

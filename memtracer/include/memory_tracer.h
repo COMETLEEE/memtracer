@@ -20,6 +20,8 @@ namespace memtracer
 #pragma region for_users
 		static void start();
 
+		static void take_snapshot();
+
 		static void stop();
 
 		static void set_report_path(char* path);
@@ -30,6 +32,10 @@ namespace memtracer
 
 		static void remove_allocation(void* block);
 #pragma endregion
+
+		void* operator new[](size_t size) = delete;
+
+		void operator delete[](void* block) = delete;
 
 	private:
 		MemoryTracer();
@@ -50,11 +56,14 @@ namespace memtracer
 
 		void operator delete(void* block);
 
-		void* operator new[](size_t size) = delete;
-
-		void operator delete[](void* block) = delete;
-
 		void thread_update();
+
+		void apply_allocation(MemoryOperation* memory_operation);
+
+		void apply_free(MemoryOperation* memory_operation);
+
+		// only function that initialize symbol and use it.
+		void make_snapshot();
 
 		AllocFunc alloc_ = Alloc;
 
@@ -74,26 +83,26 @@ namespace memtracer
 
 		std::thread tracer_thread_;
 
-		std::atomic<bool> is_stop_requested_;
+		std::recursive_mutex memory_information_mutex_;
 
 #pragma region only_write_in_tracer_thread
-		concurrency::concurrent_unordered_map<void*, size_t, std::hash<void*>
+		std::unordered_map<void*, size_t, std::hash<void*>
 			, std::equal_to<>, memtracer::MemoryTracerAllocator<std::pair<const void*, size_t>>>
 			address_to_size_map_;
 
-		concurrency::concurrent_unordered_map<void*, CallStackHash, std::hash<void*>
+		std::unordered_map<void*, CallStackHash, std::hash<void*>
 			, std::equal_to<>, memtracer::MemoryTracerAllocator<std::pair<const void*, CallStackHash>>>
 			address_to_hash_map_;
 
-		concurrency::concurrent_unordered_map<CallStackHash, class memtracer::StackBackTrace*, std::hash<CallStackHash>
+		std::unordered_map<CallStackHash, class memtracer::StackBackTrace*, std::hash<CallStackHash>
 			, std::equal_to<>, memtracer::MemoryTracerAllocator<std::pair<const CallStackHash, class memtracer::StackBackTrace*>>>
 			hash_to_stack_back_trace_map_;
 
-		concurrency::concurrent_unordered_map<CallStackHash, size_t, std::hash<CallStackHash>
+		std::unordered_map<CallStackHash, size_t, std::hash<CallStackHash>
 			, std::equal_to<>, memtracer::MemoryTracerAllocator<std::pair<const CallStackHash, size_t>>>
 			hash_to_memory_allocation_map_;
 
-		concurrency::concurrent_unordered_map<CallStackHash, size_t, std::hash<CallStackHash>
+		std::unordered_map<CallStackHash, size_t, std::hash<CallStackHash>
 			, std::equal_to<>, memtracer::MemoryTracerAllocator<std::pair<const CallStackHash, size_t>>>
 			hash_to_memory_allocation_count_map_;
 
@@ -112,6 +121,17 @@ namespace memtracer
 		instance_->tracer_thread_ = std::thread(thread_update);
 
 		instance_->is_in_trace_= true;
+	}
+
+	template <void*(* Alloc)(size_t), void*(* ArrayAlloc)(size_t), void(* Free)(void*), void(* ArrayFree)(void*)>
+	void MemoryTracer<Alloc, ArrayAlloc, Free, ArrayFree>::take_snapshot()
+	{
+		if (instance_->is_in_trace_ == true)
+		{
+			MemoryOperation* memory_operation = new MemoryOperation(EOperationType::Snapshot, nullptr, 0ull, nullptr);
+
+			instance_->memory_operations_.push(memory_operation);
+		}
 	}
 
 	template <void*(* Alloc)(size_t), void*(* ArrayAlloc)(size_t), void(* Free)(void*), void(* ArrayFree)(void*)>
@@ -192,7 +212,6 @@ namespace memtracer
 		, total_memory_allocation_count_(0)
 		, report_path_(DEFAULT_REPORT_PATH)
 		, is_in_trace_(false)
-		, is_stop_requested_(false)
 		, memory_operations_()
 		, tracer_thread_()
 		, address_to_size_map_()
@@ -245,14 +264,86 @@ namespace memtracer
 	template <void*(* Alloc)(size_t), void*(* ArrayAlloc)(size_t), void(* Free)(void*), void(* ArrayFree)(void*)>
 	void MemoryTracer<Alloc, ArrayAlloc, Free, ArrayFree>::thread_update()
 	{
-		while (is_stop_requested_ == false)
+		while (true)
 		{
 			MemoryOperation* memory_operation = nullptr;
 
 			if (memory_operations_.try_pop(memory_operation) == true)
 			{
-				
+				if (memory_operation->operation_ == EOperationType::Allocate)
+				{
+					apply_allocation(memory_operation);
+				}
+				else if (memory_operation->operation_ == EOperationType::Free)
+				{
+					apply_free(memory_operation);
+				}
+				else if (memory_operation->operation_ == EOperationType::Snapshot)
+				{
+					make_snapshot();
+				}
+				else if (memory_operation->operation_ == EOperationType::Stop)
+				{
+					// TODO : stop thread.
+					break;
+				}
 			}
+
+			delete memory_operation;
 		}
+	}
+
+	template <void*(* Alloc)(size_t), void*(* ArrayAlloc)(size_t), void(* Free)(void*), void(* ArrayFree)(void*)>
+	void MemoryTracer<Alloc, ArrayAlloc, Free, ArrayFree>::apply_allocation(MemoryOperation* memory_operation)
+	{
+		void* address = memory_operation->address_;
+
+		size_t size = memory_operation->size_;
+
+		StackBackTrace* stack_back_trace = memory_operation->stack_back_trace_;
+
+		const CallStackHash hash = stack_back_trace->get_call_stack_hash();
+
+		address_to_size_map_[address] = size;
+
+		address_to_hash_map_[address] = hash;
+
+		// manage 'StackBackTrace'
+		if (hash_to_stack_back_trace_map_.find(hash) == hash_to_stack_back_trace_map_.end())
+		{
+			hash_to_stack_back_trace_map_[hash] = stack_back_trace;
+		}
+		else
+		{
+			delete stack_back_trace;
+		}
+
+		hash_to_memory_allocation_map_[hash] += size;
+
+		hash_to_memory_allocation_count_map_[hash] += 1;
+
+		total_memory_allocation_ += size;
+
+		total_memory_allocation_count_ += 1;
+	}
+
+	template <void*(* Alloc)(size_t), void*(* ArrayAlloc)(size_t), void(* Free)(void*), void(* ArrayFree)(void*)>
+	void MemoryTracer<Alloc, ArrayAlloc, Free, ArrayFree>::apply_free(MemoryOperation* memory_operation)
+	{
+		void* address = memory_operation->address_;
+
+		if (address_to_size_map_.find(address) == address_to_size_map_.end())
+			return;
+
+		size_t size = 
+
+		address_to_size_map_[address] = 0;
+
+		total_memory_allocation_ -= size;
+	}
+
+	template <void*(* Alloc)(size_t), void*(* ArrayAlloc)(size_t), void(* Free)(void*), void(* ArrayFree)(void*)>
+	void MemoryTracer<Alloc, ArrayAlloc, Free, ArrayFree>::make_snapshot()
+	{
 	}
 }
