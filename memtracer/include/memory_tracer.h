@@ -418,7 +418,7 @@ namespace memtracer
 
 			TSYMBOL_INFO* symbol = reinterpret_cast<TSYMBOL_INFO*>(symbol_buffer);
 
-			for (FrameCount i = stack_back_trace->get_frame_count() - 1 ; i != 0 ; --i)
+			for (FrameCount i = stack_back_trace->get_frame_count() - 1 ; ; i--)
 			{
 				ZeroMemory(buffer, buffer_size);
 
@@ -453,6 +453,11 @@ namespace memtracer
 				}
 
 				report_content += buffer;
+
+				if (i == 0)
+				{
+					break;
+				}
 			}
 
 			report_contents.push_back({ total_memory_allocation, report_content });
