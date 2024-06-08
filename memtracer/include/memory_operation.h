@@ -7,26 +7,55 @@ namespace memtracer
 
 	enum class EOperationType : unsigned char
 	{
+		None,
 		Allocate,
 		Free,
 		Snapshot,
 		Stop
 	};
 
-	struct MemoryOperation
+	class IMemoryOperation
 	{
-		MemoryOperation(EOperationType operation, void* address, size_t size, class memtracer::StackBackTrace* stack_back_trace);
+	protected:
+		IMemoryOperation(EOperationType type);
 
-		EOperationType operation_;
+	public:
+		EOperationType operation_type_;
+
+		void* operator new(size_t size);
+
+		void operator delete(void* block);
+	};
+
+	class AllocateOperation : public IMemoryOperation
+	{
+	public:
+		AllocateOperation(void* address, size_t size, class memtracer::StackBackTrace* stack_back_trace);
 
 		void* address_;
 
 		size_t size_;
 
 		class memtracer::StackBackTrace* stack_back_trace_;
+	};
 
-		void* operator new(size_t size);
+	class FreeOperation : public IMemoryOperation
+	{
+	public:
+		FreeOperation(void* address);
 
-		void operator delete(void* block);
+		void* address_;
+	};
+
+	class SnapshotOperation : public IMemoryOperation
+	{
+	public:
+		SnapshotOperation();
+	};
+
+	class StopOperation : public IMemoryOperation
+	{
+	public:
+		StopOperation();
 	};
 }

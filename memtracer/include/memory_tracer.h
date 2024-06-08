@@ -22,7 +22,7 @@ namespace memtracer
 
 		void start();
 
-		void take_snapshot();
+		void take_snapshot() const;
 
 		void stop();
 
@@ -58,9 +58,9 @@ namespace memtracer
 
 		void thread_update();
 
-		void apply_allocation(MemoryOperation* memory_operation);
+		void apply_allocation(AllocateOperation* memory_operation);
 
-		void apply_free(MemoryOperation* memory_operation);
+		void apply_free(FreeOperation* memory_operation);
 
 		// only function that initialize symbol and use it.
 		void make_snapshot();
@@ -78,8 +78,8 @@ namespace memtracer
 
 		std::atomic<bool> is_in_trace_;
 
-		concurrency::concurrent_queue<MemoryOperation*
-			, memtracer::MemoryTracerAllocator<const MemoryOperation*>> memory_operations_;
+		concurrency::concurrent_queue<IMemoryOperation*
+			, memtracer::MemoryTracerAllocator<const IMemoryOperation*>> memory_operations_;
 
 		std::thread tracer_thread_;
 
@@ -135,13 +135,13 @@ namespace memtracer
 	}
 
 	template <void*(* Alloc)(size_t), void*(* ArrayAlloc)(size_t), void(* Free)(void*), void(* ArrayFree)(void*)>
-	void MemoryTracer<Alloc, ArrayAlloc, Free, ArrayFree>::take_snapshot()
+	void MemoryTracer<Alloc, ArrayAlloc, Free, ArrayFree>::take_snapshot() const
 	{
 		assert(instance_ != nullptr);
 
 		if (instance_->is_in_trace_ == true)
 		{
-			MemoryOperation* memory_operation = new MemoryOperation(EOperationType::Snapshot, nullptr, 0ull, nullptr);
+			IMemoryOperation* memory_operation = new SnapshotOperation();
 
 			instance_->memory_operations_.push(memory_operation);
 		}
@@ -154,7 +154,7 @@ namespace memtracer
 
 		if (instance_->tracer_thread_.joinable() == true)
 		{
-			memtracer::MemoryOperation* memory_operation = new MemoryOperation(EOperationType::Stop, nullptr, 0, nullptr);
+			IMemoryOperation* memory_operation = new StopOperation();
 
 			instance_->memory_operations_.push(memory_operation);
 
@@ -191,7 +191,7 @@ namespace memtracer
 		{
 			StackBackTrace* stack_back_trace = new StackBackTrace();
 
-			MemoryOperation* memory_operation = new MemoryOperation(EOperationType::Allocate, block, size, new StackBackTrace());
+			IMemoryOperation* memory_operation = new AllocateOperation(block, size, new StackBackTrace());
 
 			instance_->memory_operations_.push(memory_operation);
 		}
@@ -206,7 +206,7 @@ namespace memtracer
 
 		if (instance_->is_in_trace_ == true)
 		{
-			MemoryOperation* memory_operation = new MemoryOperation(EOperationType::Free, block, 0, nullptr);
+			IMemoryOperation* memory_operation = new FreeOperation(block);
 
 			instance_->memory_operations_.push(memory_operation);
 		}
@@ -277,23 +277,23 @@ namespace memtracer
 	{
 		while (true)
 		{
-			MemoryOperation* memory_operation = nullptr;
+			IMemoryOperation* memory_operation = nullptr;
 
 			if (memory_operations_.try_pop(memory_operation) == true)
 			{
-				if (memory_operation->operation_ == EOperationType::Allocate)
+				if (memory_operation->operation_type_ == EOperationType::Allocate)
 				{
-					apply_allocation(memory_operation);
+					apply_allocation(static_cast<AllocateOperation*>(memory_operation));
 				}
-				else if (memory_operation->operation_ == EOperationType::Free)
+				else if (memory_operation->operation_type_ == EOperationType::Free)
 				{
-					apply_free(memory_operation);
+					apply_free(static_cast<FreeOperation*>(memory_operation));
 				}
-				else if (memory_operation->operation_ == EOperationType::Snapshot)
+				else if (memory_operation->operation_type_ == EOperationType::Snapshot)
 				{
 					make_snapshot();
 				}
-				else if (memory_operation->operation_ == EOperationType::Stop)
+				else if (memory_operation->operation_type_ == EOperationType::Stop)
 				{
 					delete memory_operation;
 
@@ -306,7 +306,7 @@ namespace memtracer
 	}
 
 	template <void*(* Alloc)(size_t), void*(* ArrayAlloc)(size_t), void(* Free)(void*), void(* ArrayFree)(void*)>
-	void MemoryTracer<Alloc, ArrayAlloc, Free, ArrayFree>::apply_allocation(MemoryOperation* memory_operation)
+	void MemoryTracer<Alloc, ArrayAlloc, Free, ArrayFree>::apply_allocation(AllocateOperation* memory_operation)
 	{
 		void* address = memory_operation->address_;
 
@@ -339,7 +339,7 @@ namespace memtracer
 	}
 
 	template <void*(* Alloc)(size_t), void*(* ArrayAlloc)(size_t), void(* Free)(void*), void(* ArrayFree)(void*)>
-	void MemoryTracer<Alloc, ArrayAlloc, Free, ArrayFree>::apply_free(MemoryOperation* memory_operation)
+	void MemoryTracer<Alloc, ArrayAlloc, Free, ArrayFree>::apply_free(FreeOperation* memory_operation)
 	{
 		void* address = memory_operation->address_;
 
@@ -435,6 +435,7 @@ namespace memtracer
 					ZeroMemory(&line_info, sizeof(TIMAGEHLP_LINE64));
 
 					line_info.SizeOfStruct = sizeof(TIMAGEHLP_LINE64);
+
 					DWORD displacement = 0;
 
 					if (TSymGetLineFromAddr64(process_handle, reinterpret_cast<DWORD64>(stack_back_trace->get_stack_frame(i)), &displacement, &line_info) == TRUE)
