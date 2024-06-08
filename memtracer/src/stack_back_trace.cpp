@@ -50,7 +50,7 @@ namespace memtracer
 		return frame_count_;
 	}
 
-	void* StackBackTrace::get_stack_frame(int index) const
+	void* StackBackTrace::get_stack_frame(FrameCount index) const
 	{
 		assert(index < frame_count_);
 

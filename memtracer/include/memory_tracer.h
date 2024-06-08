@@ -418,7 +418,7 @@ namespace memtracer
 
 			TSYMBOL_INFO* symbol = reinterpret_cast<TSYMBOL_INFO*>(symbol_buffer);
 
-			for (size_t i = stack_back_trace->get_frame_count() - 1 ; i != 0 ; --i)
+			for (FrameCount i = stack_back_trace->get_frame_count() - 1 ; i != 0 ; --i)
 			{
 				ZeroMemory(buffer, buffer_size);
 
@@ -493,7 +493,7 @@ namespace memtracer
 			{
 				DWORD bytesWritten = 0;
 
-				DWORD targetBytes = report.length() * sizeof(TCHAR);
+				DWORD targetBytes = static_cast<DWORD>(report.length() * sizeof(TCHAR));
 
 				if (WriteFile(file_handle, report.c_str(), targetBytes, &bytesWritten, NULL) == TRUE)
 				{
