@@ -13,9 +13,9 @@ namespace memtracer
 		Stop
 	};
 
-	struct MemoryOperation final
+	struct MemoryOperation
 	{
-		MemoryOperation(EOperationType operation, void* address, size_t size, memtracer::StackBackTrace* stack_back_trace);
+		MemoryOperation(EOperationType operation, void* address, size_t size, class memtracer::StackBackTrace* stack_back_trace);
 
 		EOperationType operation_;
 
@@ -23,6 +23,10 @@ namespace memtracer
 
 		size_t size_;
 
-		memtracer::StackBackTrace* stack_back_trace_;
+		class memtracer::StackBackTrace* stack_back_trace_;
+
+		void* operator new(size_t size);
+
+		void operator delete(void* block);
 	};
 }

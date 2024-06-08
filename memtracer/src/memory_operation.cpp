@@ -1,4 +1,5 @@
 #include "memory_operation.h"
+#include "memory_tracer_allocation.h"
 
 namespace memtracer
 {
@@ -9,5 +10,15 @@ namespace memtracer
 		, stack_back_trace_(stack_back_trace)
 	{
 
+	}
+
+	void* MemoryOperation::operator new(size_t size)
+	{
+		return memtracer_alloc(size);
+	}
+
+	void MemoryOperation::operator delete(void* block)
+	{
+		memtracer_free(block);
 	}
 }

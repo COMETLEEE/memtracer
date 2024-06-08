@@ -8,12 +8,12 @@ namespace memtracer
 {
 	StackBackTrace::StackBackTrace()
 	{
-		frame_count_ = CaptureStackBackTrace(0, MAX_STACK_FRAME, stack_frames, &call_stack_hash_);
+		frame_count_ = CaptureStackBackTrace(FRAMES_TO_SKIP, MAX_STACK_FRAMES, stack_frames, &call_stack_hash_);
 	}
 
 	StackBackTrace::~StackBackTrace()
 	{
-		ZeroMemory(stack_frames, sizeof(size_t) * MAX_STACK_FRAME);
+		ZeroMemory(stack_frames, sizeof(size_t) * MAX_STACK_FRAMES);
 
 		frame_count_ = 0;
 

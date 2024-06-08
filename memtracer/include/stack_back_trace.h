@@ -27,7 +27,7 @@ namespace memtracer
 		void* get_stack_frame(int index) const;
 
 	private:
-		void* stack_frames[MAX_STACK_FRAME];
+		void* stack_frames[MAX_STACK_FRAMES];
 
 		FrameCount frame_count_;
 
